@@ -55,11 +55,31 @@ FILES = {
     "Keerdm (Vics) 1.41.jar": make_jar("keerdm", "1.41"),
     "kff-4.11.jar": make_jar("kotlinforforge", "4.11", nested=make_jar("kfflang", "4.11")),
     "visuals-1.0.jar": make_jar("enhancedvisuals", "1.0"),
+    "tacz-1.1.8.jar": make_jar("tacz", "1.1.8"),
+    "lrtactical-0.4.3.jar": make_jar("lrtactical", "0.4.3", [("tacz", "[1.1.5,)", "BOTH")]),
 }
 
 
 def sha(name, algo):
     return hashlib.new(algo, FILES[name]).hexdigest()
+
+
+def cf_files(mid, base):
+    def f(fid, name, date, versions=("1.20.1", "Forge"), release=1, deps=(), url=True):
+        return {"id": fid, "fileName": name, "displayName": name, "fileDate": date, "releaseType": release,
+                "gameVersions": list(versions), "downloadUrl": f"{base}/files/{name}" if url else None,
+                "hashes": [{"value": sha(name, "sha1"), "algo": 1}],
+                "dependencies": [{"modId": d, "relationType": 3} for d in deps] + [{"modId": 999, "relationType": 2}]}
+    return {
+        100: [f(1003, "warfare-neo.jar", "2026-10-01", ("1.20.1", "NeoForge")),
+              f(1002, "warfare-0.8.9.jar", "2026-09-01", deps=[200])],
+        200: [f(2001, "curios-5.14.1.jar", "2026-08-01", url=False)],
+        300: [f(3002, "Keerdm (Vics) 1.41.jar", "2026-06-01"), f(3001, "Keerdm (TACZ) 1.42.jar", "2026-05-01")],
+        400: [f(4001, "addon-1.0.jar", "2026-04-01")],
+        500: [f(5001, "geckolib-cf-4.7.0.jar", "2026-03-01")],
+        600: [f(6001, "kff-4.11.jar", "2026-03-01")],
+        700: [f(7001, "tacz-1.1.8.jar", "2026-05-01")],
+    }[mid]
 
 
 class Fake(BaseHTTPRequestHandler):
@@ -88,7 +108,8 @@ class Fake(BaseHTTPRequestHandler):
             return self.send(200, FILES[name], "application/java-archive") if name in FILES else self.send(404, {})
         # ---- Modrinth
         mr_projects = {"gunmod": "GUNID", "GUNID": "GUNID", "GECKOID": "GECKOID", "geckolib": "GECKOID",
-                       "visuals": "VISID", "VISID": "VISID", "warfare-mr": "WARMR", "WARMR": "WARMR"}
+                       "visuals": "VISID", "VISID": "VISID", "warfare-mr": "WARMR", "WARMR": "WARMR",
+                       "tacz-mr": "TACZMR", "TACZMR": "TACZMR", "lr": "LRID", "LRID": "LRID"}
         if path.startswith("/mr/project/"):
             rest = path[len("/mr/project/"):].split("/")
             pid = mr_projects.get(rest[0])
@@ -109,6 +130,8 @@ class Fake(BaseHTTPRequestHandler):
                 "GECKOID": [ver("G1", "geckolib-4.8.4.jar", "release", "2026-07-01")],
                 "VISID": [ver("VI", "visuals-1.0.jar", "release", "2026-01-01")],
                 "WARMR": [ver("WM", "warfare-0.8.9.jar", "release", "2026-01-01")],
+                "TACZMR": [ver("T1", "tacz-1.1.8.jar", "release", "2026-05-01")],
+                "LRID": [ver("L1", "lrtactical-0.4.3.jar", "release", "2026-05-01", ["TACZMR"])],
             }[pid]
             return self.send(200, versions)
         # ---- CurseForge API (needs the key)
@@ -116,7 +139,7 @@ class Fake(BaseHTTPRequestHandler):
             if self.headers.get("x-api-key") != "testkey":
                 return self.send(403, {})
             if path == "/cf/v1/mods/search":
-                ids = {"warfare": 100, "keerdm": 300, "addon": 400, "geckolib-cf": 500, "kff": 600}
+                ids = {"warfare": 100, "keerdm": 300, "addon": 400, "geckolib-cf": 500, "kff": 600, "tacz-cf": 700}
                 slug = q["slug"]
                 return self.send(200, {"data": [{"id": ids[slug], "slug": slug, "name": slug.title()}] if slug in ids else []})
             parts = path.split("/")  # /cf/v1/mods/<id>[/files]
@@ -124,25 +147,22 @@ class Fake(BaseHTTPRequestHandler):
             if len(parts) == 5:
                 return self.send(200, {"data": {"id": mid, "slug": f"p{mid}", "name": f"Project {mid}"}})
             assert q["gameVersion"] == "1.20.1" and q["modLoaderType"] == "1", q
-
-            def f(fid, name, date, versions=("1.20.1", "Forge"), release=1, deps=(), url=True):
-                return {"id": fid, "fileName": name, "displayName": name, "fileDate": date, "releaseType": release,
-                        "gameVersions": list(versions), "downloadUrl": f"{b}/files/{name}" if url else None,
-                        "hashes": [{"value": sha(name, "sha1"), "algo": 1}],
-                        "dependencies": [{"modId": d, "relationType": 3} for d in deps] + [{"modId": 999, "relationType": 2}]}
-            files = {
-                100: [f(1003, "warfare-neo.jar", "2026-10-01", ("1.20.1", "NeoForge")),
-                      f(1002, "warfare-0.8.9.jar", "2026-09-01", deps=[200])],
-                200: [f(2001, "curios-5.14.1.jar", "2026-08-01", url=False)],
-                300: [f(3002, "Keerdm (Vics) 1.41.jar", "2026-06-01"), f(3001, "Keerdm (TACZ) 1.42.jar", "2026-05-01")],
-                400: [f(4001, "addon-1.0.jar", "2026-04-01")],
-                500: [f(5001, "geckolib-cf-4.7.0.jar", "2026-03-01")],
-                600: [f(6001, "kff-4.11.jar", "2026-03-01")],
-            }[mid]
-            return self.send(200, {"data": files})
-        # ---- CurseForge website: blocked like Cloudflare would
-        if path.startswith("/web/"):
+            return self.send(200, {"data": cf_files(mid, b)})
+        # ---- CurseForge website: search is blocked (as seen on a real machine), file lists work
+        if path == "/web/mods/search":
             return self.send(403, b"<html>Just a moment...</html>", "text/html")
+        if path.startswith("/web/mods/"):
+            parts = path.split("/")  # /web/mods/<id>/files[/<fid>/download]
+            mid = int(parts[3])
+            if len(parts) == 7 and parts[6] == "download":
+                name = next(f["fileName"] for f in cf_files(mid, b) if f["id"] == int(parts[5]))
+                self.send_response(302)
+                self.send_header("Location", f"{b}/files/{urllib.parse.quote(name)}")
+                self.end_headers()
+                return
+            web = [{k: f[k] for k in ("id", "fileName", "displayName", "releaseType", "gameVersions")}
+                   | {"dateCreated": f["fileDate"]} for f in cf_files(mid, b)]
+            return self.send(200, {"data": web, "pagination": {"index": 0, "pageSize": 50, "totalCount": len(web)}})
         self.send(404, {})
 
 
@@ -150,12 +170,17 @@ MANIFEST = {
     "pack": {"name": "Test Pack", "version": "1.0.0", "minecraft": "1.20.1", "loader": "forge", "forge": "47.4.27"},
     "mods": [
         {"name": "Gun Mod", "modrinth": "gunmod", "side": "both"},
-        {"name": "Warfare", "curseforge": "warfare", "modrinth": "warfare-mr", "side": "both"},
+        {"name": "Warfare", "curseforge": "warfare", "modrinth": "warfare-mr", "side": "both", "prefer": "curseforge"},
         {"name": "Keerdm", "curseforge": "keerdm", "side": "both", "match": "TACZ"},
         {"name": "Addon", "curseforge": "addon", "side": "both"},
         {"name": "GeckoLib (CF)", "curseforge": "geckolib-cf", "side": "both"},
         {"name": "Kotlin for Forge", "curseforge": "kff", "side": "both"},
         {"name": "Visuals", "modrinth": "visuals", "side": "client"},
+        # TaCZ comes from CurseForge, and LR Tactical (Modrinth) needs TaCZ's Modrinth project:
+        # the pack must end up with exactly one TaCZ.
+        {"name": "TaCZ", "curseforge": "tacz-cf", "curseforgeId": 700, "modrinth": "tacz-mr", "side": "both",
+         "prefer": "curseforge"},
+        {"name": "LR Tactical", "modrinth": "lr", "side": "both"},
         {"name": "Disabled", "curseforge": "nope", "side": "both", "enabled": False},
     ],
     "local": [{"name": "Server Auth", "file": "local/auth.jar", "side": "server"}],
@@ -258,8 +283,13 @@ class InstallModsTest(unittest.TestCase):
         self.assertFalse(any("nope" in f["name"].lower() for f in lock["files"]))
         # curios has no download URL (author disabled third-party downloads) -> manual step reported
         self.assertRegex(out, r"PROBLEM: .*curios-5\.14\.1\.jar by hand .*/files/2001")
-        # duplicate geckolib (Modrinth + CurseForge) -> newest kept, listed entry preferred
-        self.assertRegex(out, r"geckolib came twice")
+        # duplicate geckolib (Modrinth dependency + listed CurseForge entry) -> the listed one is kept, as a note
+        self.assertRegex(out, r"note: geckolib was found twice; using geckolib-cf-4\.7\.0\.jar, not geckolib-4\.8\.4\.jar")
+        self.assertNotRegex(out, r"PROBLEM: .*geckolib")
+        # TaCZ: listed (CurseForge) and needed by LR Tactical (Modrinth) -> one copy, no second download
+        self.assertNotRegex(out, r"needed by LR Tactical")
+        self.assertEqual([f["file_name"] for f in lock["files"]].count("tacz-1.1.8.jar"), 1)
+        self.assertNotRegex(out, r"tacz (came|was found) twice")
         # version range problem and missing dependency are reported; CLIENT-only deps ignored on the server
         self.assertRegex(out, r"addon \(addon-1\.0\.jar\) needs superbwarfare \[0\.9,\), but the pack has 0\.8\.9")
         self.assertRegex(out, r"needs the mod 'missingmod'")
@@ -270,6 +300,8 @@ class InstallModsTest(unittest.TestCase):
         self.assertEqual(code, 1)
 
         mods = sorted(p.name for p in (self.tmp / "server" / "mods").iterdir())
+        self.assertIn("tacz-1.1.8.jar", mods)
+        self.assertIn("lrtactical-0.4.3.jar", mods)
         self.assertIn("auth.jar", mods)  # server-only local mod
         self.assertNotIn("visuals-1.0.jar", mods)  # client-only
         self.assertNotIn("curios-5.14.1.jar", mods)  # not downloaded yet
@@ -304,14 +336,72 @@ class InstallModsTest(unittest.TestCase):
         code, out = self.run_script()
         self.assertRegex(out, r"modpack/manual/curios-5\.14\.1\.jar does not match")
 
-    def test_without_key_falls_back_to_modrinth(self):
+    def test_without_key_uses_website_file_lists(self):
+        """No API key: search is blocked (403), but projects with a known ID still download."""
         code, out = self.run_script(key=None)
         self.assertIn("CurseForge via website", out)
         lock = json.loads((self.tmp / "modpack" / "mods.lock.json").read_text())
-        sources = {f["entry"]: f["source"] for f in lock["files"]}
-        self.assertEqual(sources["Warfare"], "modrinth")  # CurseForge blocked -> Modrinth copy
-        self.assertRegex(out, r"Keerdm: could not find it .*modpack/manual/")
+        by_entry = {f["entry"]: f for f in lock["files"] if f["entry"]}
+        # TaCZ has an ID: resolved and downloaded from CurseForge even after search was refused
+        self.assertEqual(by_entry["TaCZ"]["source"], "curseforge")
+        self.assertIn("tacz-1.1.8.jar", {p.name for p in (self.tmp / "server" / "mods").iterdir()})
+        self.assertIn("sha256", by_entry["TaCZ"]["hashes"])  # pinned on first download (no published hash)
+        # Warfare prefers CurseForge but has no ID: falls back to Modrinth
+        self.assertEqual(by_entry["Warfare"]["source"], "modrinth")
+        # Keerdm is CurseForge-only without an ID: a clear message saying what to add
+        self.assertRegex(out, r"Keerdm: could not find it \(curseforge: needs its CurseForge project ID")
         self.assertEqual(code, 1)
+
+    def test_changed_entry_is_resolved_again(self):
+        self.run_script()
+        manifest = json.loads((self.tmp / "modpack" / "mods.json").read_text())
+        next(m for m in manifest["mods"] if m["name"] == "Keerdm")["match"] = "Vics"
+        (self.tmp / "modpack" / "mods.json").write_text(json.dumps(manifest))
+        Fake.hits.clear()
+        self.run_script()
+        lock = json.loads((self.tmp / "modpack" / "mods.lock.json").read_text())
+        self.assertIn("Keerdm (Vics) 1.41.jar", [f["file_name"] for f in lock["files"]])
+        self.assertNotIn("Keerdm (TACZ) 1.42.jar", [f["file_name"] for f in lock["files"]])
+        # only the changed entry was looked up again (Keerdm has no ID here, so it is searched for)
+        allowed = {"/cf/v1/mods/search", "/cf/v1/mods/300", "/cf/v1/mods/300/files", "/files/Keerdm (Vics) 1.41.jar"}
+        self.assertLessEqual({h for h in Fake.hits if h.startswith(("/cf/", "/files/"))}, allowed, Fake.hits)
+
+    def test_old_lock_with_duplicate_tacz(self):
+        """The lock file written on the owner's laptop by the first version: TaCZ twice, no spec fields."""
+        old_lock = {"minecraft": "1.20.1", "loader": "forge", "files": [
+            {"name": "TaCZ", "side": "both", "source": "curseforge", "project": "700", "file_id": "7001",
+             "file_name": "tacz-1.1.8.jar", "url": f"{Fake.base}/files/tacz-1.1.8.jar", "page": "",
+             "hashes": {"sha1": sha("tacz-1.1.8.jar", "sha1")}, "entry": "TaCZ", "required_by": []},
+            {"name": "LR Tactical", "side": "both", "source": "modrinth", "project": "LRID", "file_id": "L1",
+             "file_name": "lrtactical-0.4.3.jar", "url": f"{Fake.base}/files/lrtactical-0.4.3.jar", "page": "",
+             "hashes": {"sha512": sha("lrtactical-0.4.3.jar", "sha512")}, "entry": "LR Tactical", "required_by": []},
+            {"name": "TaCZ", "side": "both", "source": "modrinth", "project": "TACZMR", "file_id": "T1",
+             "file_name": "tacz-1.1.8.jar", "url": f"{Fake.base}/files/tacz-1.1.8.jar", "page": "",
+             "hashes": {"sha512": sha("tacz-1.1.8.jar", "sha512")}, "entry": None, "required_by": ["LR Tactical"]},
+        ]}
+        (self.tmp / "modpack" / "mods.lock.json").write_text(json.dumps(old_lock))
+        code, out = self.run_script()
+        mods = [p.name for p in (self.tmp / "server" / "mods").iterdir()]
+        self.assertIn("tacz-1.1.8.jar", mods)
+        self.assertIn("lrtactical-0.4.3.jar", mods)
+        self.assertNotRegex(out, r"lrtactical .*needs the mod 'tacz'")
+        lock = json.loads((self.tmp / "modpack" / "mods.lock.json").read_text())
+        self.assertEqual([f["file_name"] for f in lock["files"]].count("tacz-1.1.8.jar"), 1)
+
+    def test_same_file_twice_keeps_one(self):
+        """Two copies of one jar (found on both sites) must leave exactly one, never zero."""
+        m = self.m
+        jar_a = self.tmp / "a" / "tacz-1.1.8.jar"
+        jar_b = self.tmp / "b" / "tacz-1.1.8.jar"
+        for jar in (jar_a, jar_b):
+            jar.parent.mkdir()
+            jar.write_bytes(FILES["tacz-1.1.8.jar"])
+        one = m.ModFile("TaCZ", "both", "curseforge", "700", "7001", jar_a.name, None, "", entry="TaCZ", path=str(jar_a))
+        two = m.ModFile("TaCZ", "both", "modrinth", "TACZMR", "T1", jar_b.name, None, "", path=str(jar_b))
+        problems, notes, drop = m.check_pack([one, two], "server", {"minecraft": "1.20.1", "forge": "47.4.27"})
+        self.assertEqual(drop, {id(two)})
+        self.assertEqual(problems, [])
+        self.assertEqual(notes, [])  # identical file: nothing worth telling
 
     def test_offline_needs_lock(self):
         code, out = self.run_script("--offline", key=None)

@@ -47,10 +47,13 @@ Everything happens in a terminal on the laptop.
    python3 scripts/install-mods.py
    ```
 
-   - Most of these mods are on CurseForge. Downloads are most reliable with a free
-     CurseForge API key from <https://console.curseforge.com>:
-     `export CF_API_KEY='your-key'` before running the script. Without a key the script
-     tries CurseForge's public website, then Modrinth.
+   - It downloads from Modrinth where a mod is there (Modrinth publishes file hashes and
+     dependency lists), and otherwise from CurseForge, using each project's ID from
+     `modpack/mods.json`. No account or key is needed. If CurseForge ever refuses, a free
+     API key from <https://console.curseforge.com> helps:
+     `export CF_API_KEY='your-key'` before running the script.
+   - It remembers the exact files in `modpack/mods.lock.json`. Run it with `--update` to
+     look for newer versions.
    - Lines starting with `PROBLEM:` say exactly what is missing. Usually you download a
      file in the browser from the link shown, save it in `modpack/manual/`, and run the
      script again.

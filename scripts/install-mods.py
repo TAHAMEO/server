@@ -87,6 +87,8 @@ class ModFile:
     page: str
     hashes: dict[str, str] = field(default_factory=dict)
     entry: str | None = None  # the mods.json entry this file is for
+    spec: str | None = None  # fingerprint of that entry's settings; a changed entry is resolved again
+    also: list[str] = field(default_factory=list)  # the same mod on the other site, e.g. "modrinth:SzzJttH8"
     required_by: list[str] = field(default_factory=list)
     path: str | None = None  # where the jar is on disk (not saved in the lock)
 
@@ -233,13 +235,14 @@ class CurseForge:
         self.minecraft = minecraft
         self.key = api_key
         self.disabled_reason: str | None = None
+        self.search_blocked: str | None = None
         self.mods: dict[int, dict] = {}
 
     @property
     def mode(self) -> str:
         return "API" if self.key else "website"
 
-    def _get(self, url: str):
+    def _get(self, url: str, search: bool = False):
         if self.disabled_reason:
             raise ResolveError(self.disabled_reason)
         try:
@@ -247,8 +250,12 @@ class CurseForge:
                              else {"Accept": "application/json"})
         except ResolveError as e:
             if not self.key and "HTTP 404" not in str(e):
-                # One failure means the website API is blocked for us: stop trying for this run.
-                self.disabled_reason = f"CurseForge website API not usable ({e})"
+                # The website blocks its search for scripts, while file lists still work.
+                # So a failed search only stops searching; any other failure stops CurseForge.
+                if search:
+                    self.search_blocked = str(e)
+                else:
+                    self.disabled_reason = f"CurseForge website not usable ({e})"
             raise
 
     def project_id(self, slug: str, known_id: int | None) -> int:
@@ -258,9 +265,12 @@ class CurseForge:
             query = urllib.parse.urlencode({"gameId": CF_GAME_MINECRAFT, "classId": CF_CLASS_MODS, "slug": slug})
             hits = self._get(f"{CF_API}/v1/mods/search?{query}").get("data", [])
         else:
+            if self.search_blocked:
+                raise ResolveError(f"needs its CurseForge project ID (\"curseforgeId\" in mods.json); "
+                                   f"CurseForge search is blocked ({self.search_blocked})")
             query = urllib.parse.urlencode({"gameId": CF_GAME_MINECRAFT, "classId": CF_CLASS_MODS, "filterText": slug,
-                                            "pageSize": 50, "index": 0})
-            hits = self._get(f"{CF_WEB}/mods/search?{query}").get("data", [])
+                                            "pageSize": 20, "index": 0})
+            hits = self._get(f"{CF_WEB}/mods/search?{query}", search=True).get("data", [])
         for hit in hits:
             if hit.get("slug") == slug:
                 self.mods[int(hit["id"])] = hit
@@ -340,6 +350,10 @@ def load_json(path: Path, default):
         return default
 
 
+def entry_spec(entry: dict) -> str:
+    return hashlib.sha1(json.dumps(entry, sort_keys=True).encode("utf-8")).hexdigest()[:12]
+
+
 def resolve_pack(manifest: dict, lock: dict | None, cf: CurseForge, mr: Modrinth,
                  offline: bool) -> tuple[list[ModFile], list[str]]:
     """Returns the files to use and a list of problems."""
@@ -347,7 +361,7 @@ def resolve_pack(manifest: dict, lock: dict | None, cf: CurseForge, mr: Modrinth
     files: list[ModFile] = []
     locked = {}
     for item in (lock or {}).get("files", []):
-        mod = ModFile(**item)
+        mod = ModFile(**{k: v for k, v in item.items() if k in ModFile.__dataclass_fields__})
         locked.setdefault(mod.entry or f"dep:{mod.source}:{mod.project}", mod)
     seen_projects: set[tuple[str, str]] = set()
     entries = [e for e in manifest["mods"] if e.get("enabled", True)]
@@ -366,17 +380,24 @@ def resolve_pack(manifest: dict, lock: dict | None, cf: CurseForge, mr: Modrinth
     queue: list[tuple[str, str, str, list[str]]] = []  # (source, project, side, required_by)
 
     for e in entries:
+        spec = entry_spec(e)
         mod = locked.get(e["name"])
-        if mod:
+        if mod and mod.spec == spec:
             add(mod)
             continue
         if offline:
             problems.append(f"{e['name']}: not in mods.lock.json and --offline was given")
             continue
         errors = []
-        for source in ("curseforge", "modrinth"):
+        # Modrinth first: it publishes hashes and dependency lists. "prefer": "curseforge"
+        # is for mods whose newest files are only on CurseForge.
+        order = ("curseforge", "modrinth") if e.get("prefer") == "curseforge" else ("modrinth", "curseforge")
+        for source in order:
             try:
-                if source == "curseforge" and e.get("curseforge") and not cf.disabled_reason:
+                if source == "curseforge" and e.get("curseforge"):
+                    if cf.disabled_reason:
+                        errors.append(f"curseforge: skipped ({cf.disabled_reason})")
+                        continue
                     mod, deps = cf.resolve(e["curseforge"], e.get("curseforgeId"), e["name"], e["side"], e.get("match"))
                     queue += [("curseforge", str(d), e["side"], [e["name"]]) for d in deps]
                 elif source == "modrinth" and e.get("modrinth"):
@@ -385,6 +406,15 @@ def resolve_pack(manifest: dict, lock: dict | None, cf: CurseForge, mr: Modrinth
                 else:
                     continue
                 mod.entry = e["name"]
+                mod.spec = spec
+                # Remember the mod's ID on the other site, so a dependency found there is not added again.
+                if mod.source == "curseforge" and e.get("modrinth"):
+                    try:
+                        mod.also.append("modrinth:" + mr.project(e["modrinth"])["id"])
+                    except ResolveError:
+                        pass
+                elif mod.source == "modrinth" and e.get("curseforgeId"):
+                    mod.also.append(f"curseforge:{e['curseforgeId']}")
                 add(mod)
                 print(f"  found  {e['name']}: {mod.file_name} ({mod.source})")
                 break
@@ -397,9 +427,19 @@ def resolve_pack(manifest: dict, lock: dict | None, cf: CurseForge, mr: Modrinth
                             f"Download the Forge {manifest['pack']['minecraft']} file from "
                             f"{' or '.join(l for l in links if l)} into modpack/manual/")
 
+    # A dependency that is also a listed mod (found on the other site) must not be added twice.
+    listed_ids = {f"curseforge:{p}" for p in listed_cf}
+    for mod in files:
+        listed_ids.add(f"{mod.source}:{mod.project}")
+        listed_ids.update(mod.also)
+
+    def listed(source: str, project: str) -> bool:
+        return f"{source}:{project}" in listed_ids
+
+    pending_deps = [mod for key, mod in locked.items() if key.startswith("dep:")]
+
     # Dependencies from the lock file, as long as something in the pack still needs them.
     needed = set(entry_names)
-    pending_deps = [mod for key, mod in locked.items() if key.startswith("dep:")]
     while True:
         ready = [mod for mod in pending_deps if any(r in needed for r in mod.required_by)]
         if not ready:
@@ -407,12 +447,13 @@ def resolve_pack(manifest: dict, lock: dict | None, cf: CurseForge, mr: Modrinth
         for mod in ready:
             pending_deps.remove(mod)
             needed.add(mod.name)
-            add(mod)
+            if not listed(mod.source, mod.project):
+                add(mod)
 
     # Required dependencies the mod pages declare (only the CurseForge API and Modrinth report them).
     while queue and not offline:
         source, project, side, required_by = queue.pop(0)
-        if (source, project) in seen_projects or (source == "curseforge" and project in listed_cf):
+        if (source, project) in seen_projects or listed(source, project):
             continue
         try:
             if source == "curseforge":
@@ -601,39 +642,46 @@ def in_range(version: str, spec: str) -> bool | None:
     return False
 
 
-def check_pack(files: list[ModFile], side: str, builtin: dict[str, str]) -> tuple[list[str], set[str]]:
-    """Checks one side ('server' or 'client'); returns problems and the jar names to drop as duplicates."""
+def check_pack(files: list[ModFile], side: str, builtin: dict[str, str]) -> tuple[list[str], list[str], set[int]]:
+    """Checks one side ('server' or 'client').
+
+    Returns problems, notes, and the id() of every file to leave out because another
+    file is the same mod (Forge refuses to start with a mod installed twice).
+    """
     present = [m for m in files if m.path and m.side in ("both", side)]
     provided: dict[str, list[tuple[str, ModFile, bool]]] = {}
-    infos: dict[str, list[ModInfo]] = {}
+    infos: dict[int, list[ModInfo]] = {}
     for mod in present:
         try:
-            infos[mod.file_name] = read_mods(Path(mod.path).read_bytes())
+            infos[id(mod)] = read_mods(Path(mod.path).read_bytes())
         except (zipfile.BadZipFile, OSError) as e:
-            infos[mod.file_name] = []
+            infos[id(mod)] = []
             print(f"  warning: cannot read {mod.file_name}: {e}")
-        for info in infos[mod.file_name]:
+        for info in infos[id(mod)]:
             provided.setdefault(info.mod_id, []).append((info.version, mod, not info.nested))
 
     problems: list[str] = []
-    drop: set[str] = set()
+    notes: list[str] = []
+    drop: set[int] = set()
     for mod_id, providers in provided.items():
-        top_level = [p for p in providers if p[2]]
+        top_level = [p for p in providers if p[2] and id(p[1]) not in drop]
         if len(top_level) > 1:
-            # Two jars that are the same mod make Forge refuse to start: keep the newest.
+            # Keep a file listed in mods.json over a dependency, then the newest version.
             top_level.sort(key=lambda p: version_key(p[0]), reverse=True)
             top_level.sort(key=lambda p: p[1].entry is not None, reverse=True)
             for _, mod, _ in top_level[1:]:
-                drop.add(mod.file_name)
-            problems.append(f"{mod_id} came twice ({', '.join(p[1].file_name for p in top_level)}); "
-                            f"keeping {top_level[0][1].file_name}")
-    versions = {mod_id: max((p[0] for p in ps if p[1].file_name not in drop), key=version_key, default="")
+                drop.add(id(mod))
+            kept = top_level[0][1]
+            others = sorted({p[1].file_name for p in top_level[1:]} - {kept.file_name})
+            if others:
+                notes.append(f"{mod_id} was found twice; using {kept.file_name}, not {', '.join(others)}")
+    versions = {mod_id: max((p[0] for p in ps if id(p[1]) not in drop), key=version_key, default="")
                 for mod_id, ps in provided.items()}
     versions.update(builtin)
     for mod in present:
-        if mod.file_name in drop:
+        if id(mod) in drop:
             continue
-        for info in infos[mod.file_name]:
+        for info in infos[id(mod)]:
             for dep_id, mandatory, spec, dep_side in info.deps:
                 if not mandatory or dep_side not in ("BOTH", side.upper()) or not dep_id:
                     continue
@@ -643,7 +691,7 @@ def check_pack(files: list[ModFile], side: str, builtin: dict[str, str]) -> tupl
                     continue
                 if in_range(versions[dep_id], spec) is False:
                     problems.append(f"{info.mod_id} ({mod.file_name}) needs {dep_id} {spec}, but the pack has {versions[dep_id]}")
-    return problems, drop
+    return problems, notes, drop
 
 
 # ---------------------------------------------------------------- installing
@@ -702,6 +750,7 @@ def client_readme(pack: dict, files: list[ModFile], cf_zip: str) -> str:
 
 def build_client_packs(pack: dict, files: list[ModFile]) -> list[Path]:
     DIST.mkdir(exist_ok=True)
+    files = list({m.file_name: m for m in files}.values())
     slug = re.sub(r"[^a-z0-9]+", "-", pack["name"].lower()).strip("-")
     plain = DIST / f"{slug}-client.zip"
     cf_zip = DIST / f"{slug}-curseforge.zip"
@@ -778,13 +827,15 @@ def main() -> int:
 
     print("Checking dependencies")
     builtin = {"minecraft": pack["minecraft"], "forge": pack["forge"]}
-    check_problems = []
-    dropped: set[str] = set()
+    check_problems: list[str] = []
+    notes: list[str] = []
+    dropped: set[int] = set()
     for side in ("server", "client"):
-        side_problems, drop = check_pack(files, side, builtin)
+        side_problems, side_notes, drop = check_pack(files, side, builtin)
         dropped |= drop
         check_problems += [f"[{side}] {p}" for p in side_problems]
-    usable = [m for m in files if m.path and m.file_name not in dropped]
+        notes += [n for n in side_notes if n not in notes]
+    usable = [m for m in files if m.path and id(m) not in dropped]
 
     lock_files = [m.lock_dict() for m in files if m.source in ("curseforge", "modrinth")]
     LOCK.write_text(json.dumps({"minecraft": pack["minecraft"], "loader": pack["loader"],
@@ -800,6 +851,8 @@ def main() -> int:
     print()
     for path in built:
         print(f"Players' pack: {path.relative_to(ROOT)} ({path.stat().st_size // (1024 * 1024)} MB)")
+    for n in notes:
+        print(f"note: {n}")
     for p in problems + check_problems:
         print(f"PROBLEM: {p}")
     if problems or check_problems:
