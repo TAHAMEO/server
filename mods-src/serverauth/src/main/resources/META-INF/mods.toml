@@ -1,0 +1,25 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="MIT"
+
+[[mods]]
+modId="serverauth"
+version="1.0.0"
+displayName="Server Auth"
+description='''Password login (/register, /login) for offline-mode Forge servers. Server-side only: players do not need it.'''
+# Server-only mod: clients without it can join and see no red X in the server list.
+displayTest="IGNORE_SERVER_VERSION"
+
+[[dependencies.serverauth]]
+modId="forge"
+mandatory=true
+versionRange="[47,)"
+ordering="NONE"
+side="SERVER"
+
+[[dependencies.serverauth]]
+modId="minecraft"
+mandatory=true
+versionRange="[1.20.1,1.20.2)"
+ordering="NONE"
+side="SERVER"

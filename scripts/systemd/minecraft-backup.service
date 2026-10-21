@@ -1,0 +1,28 @@
+# Installed by scripts/install-service.sh. Run by minecraft-backup.timer.
+[Unit]
+Description=Back up the Minecraft world
+
+[Service]
+Type=oneshot
+User=minecraft
+Group=minecraft
+UMask=0077
+WorkingDirectory=@SERVER_DIR@
+ExecStart=@REPO_DIR@/scripts/backup.sh
+Nice=10
+IOSchedulingClass=idle
+
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=@PROTECT_HOME@
+BindPaths=@SERVER_DIR@
+BindReadOnlyPaths=@REPO_DIR@/scripts
+PrivateTmp=yes
+PrivateDevices=yes
+PrivateNetwork=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes

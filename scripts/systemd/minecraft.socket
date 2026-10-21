@@ -1,0 +1,12 @@
+# Console input for the Minecraft service: `echo "say hi" > /run/minecraft.console`
+# (scripts/mc does this for you). Only root and the minecraft group can write to it.
+[Unit]
+Description=Minecraft server console
+PartOf=minecraft.service
+
+[Socket]
+ListenFIFO=/run/minecraft.console
+SocketUser=minecraft
+SocketGroup=minecraft
+SocketMode=0660
+RemoveOnStop=yes

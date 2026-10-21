@@ -1,0 +1,74 @@
+# Installed by scripts/install-service.sh, which fills in the @...@ values.
+[Unit]
+Description=Minecraft Forge server (@SERVER_DIR@)
+Wants=network-online.target
+After=network-online.target minecraft.socket
+Requires=minecraft.socket
+# Stop restarting after 4 crashes in 15 minutes.
+StartLimitIntervalSec=900
+StartLimitBurst=4
+
+[Service]
+Type=simple
+User=minecraft
+Group=minecraft
+# Files the server creates stay editable for the minecraft group (you), never for others.
+UMask=0007
+WorkingDirectory=@SERVER_DIR@
+ExecStart=@SERVER_DIR@/start.sh --service
+# Type "stop" into the console and wait, so the world is saved and players see a message.
+ExecStop=/bin/sh -c 'echo stop > /run/minecraft.console; while kill -0 "$MAINPID" 2>/dev/null; do sleep 1; done'
+TimeoutStopSec=180
+SuccessExitStatus=0 130 143
+Restart=on-failure
+RestartSec=15
+
+# Console input comes from /run/minecraft.console (see scripts/mc).
+Sockets=minecraft.socket
+StandardInput=socket
+# The server already writes logs/latest.log; keep only errors in the journal (saves disk space).
+StandardOutput=null
+StandardError=journal
+
+StateDirectory=minecraft
+Environment=HOME=/var/lib/minecraft
+# A safety net: the heap is 6 GB (user_jvm_args.txt) plus about 2 GB for Java itself.
+MemoryMax=10G
+TasksMax=4096
+
+# ---- Sandbox. If a mod ever has a security hole, the damage stays inside the server folder.
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=@PROTECT_HOME@
+BindPaths=@SERVER_DIR@
+PrivateTmp=yes
+PrivateDevices=yes
+DevicePolicy=closed
+PrivateIPC=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+KeyringMode=private
+RemoveIPC=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+# The server may only listen on its own port (server-port in server.properties).
+# If you change server-port, run scripts/install-service.sh again.
+SocketBindAllow=tcp:@PORT@
+SocketBindDeny=any
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
+SystemCallErrorNumber=EPERM
+
+[Install]
+WantedBy=multi-user.target

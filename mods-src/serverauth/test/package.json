@@ -1,0 +1,8 @@
+{
+  "name": "serverauth-tests",
+  "private": true,
+  "description": "End-to-end tests for the Server Auth mod (run ./run.sh)",
+  "dependencies": {
+    "mineflayer": "4.39.0"
+  }
+}

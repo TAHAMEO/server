@@ -1,9 +1,33 @@
-# Xmx and Xms set the maximum and minimum RAM usage, respectively.
-# They can take any number, followed by an M or a G.
-# M means Megabyte, G means Gigabyte.
-# For example, to set the maximum to 3GB: -Xmx3G
-# To set the minimum to 2.5GB: -Xms2500M
+# JVM settings for this server. start.sh and Forge's run.sh / run.bat read this file.
 
-# A good default for a modded server is 4GB.
-# Uncomment the next line to set it.
-# -Xmx4G
+# Memory. 6 GB fits a 16 GB laptop and still leaves room for the system and a
+# game client. If nothing else runs on the machine you can raise -Xmx to 8G.
+-Xms4G
+-Xmx6G
+
+# Aikar's G1 garbage-collector flags (https://docs.papermc.io/paper/aikars-flags),
+# the usual choice for Minecraft servers with less than 12 GB of memory.
+-XX:+UseG1GC
+-XX:+ParallelRefProcEnabled
+-XX:MaxGCPauseMillis=200
+-XX:+UnlockExperimentalVMOptions
+-XX:+DisableExplicitGC
+-XX:G1NewSizePercent=30
+-XX:G1MaxNewSizePercent=40
+-XX:G1HeapRegionSize=8M
+-XX:G1ReservePercent=20
+-XX:G1HeapWastePercent=5
+-XX:G1MixedGCCountTarget=4
+-XX:InitiatingHeapOccupancyPercent=15
+-XX:G1MixedGCLiveThresholdPercent=90
+-XX:G1RSetUpdatingPauseTimePercent=5
+-XX:SurvivorRatio=32
+-XX:+PerfDisableSharedMem
+-XX:MaxTenuringThreshold=1
+
+# The i5-5200U has 2 cores / 4 threads: use all 4 while the game is paused for
+# garbage collection, but only 1 in the background so the game keeps the rest.
+-XX:ParallelGCThreads=4
+-XX:ConcGCThreads=1
+
+-Dfile.encoding=UTF-8

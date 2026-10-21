@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+# Everyday server commands.
+#
+#   scripts/mc start | stop | restart | status   control the background service
+#   scripts/mc logs                              follow the server log
+#   scripts/mc cmd <command...>                  run a console command, e.g.: scripts/mc cmd say Hello
+#   scripts/mc whitelist add|remove <name>       let a player in (or not)
+#   scripts/mc op <name>                         make a player an admin
+#   scripts/mc backup                            back up the world now
+#
+# whitelist/op write offline-mode UUIDs. In offline mode the server's own
+# /whitelist add looks the name up at Mojang and can store the wrong UUID.
+set -euo pipefail
+
+repo="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+server="$repo/server"
+console="${MC_CONSOLE:-/run/minecraft.console}"
+
+die() {
+    echo "mc: $*" >&2
+    exit 1
+}
+
+service_installed() {
+    [[ -f /etc/systemd/system/minecraft.service ]]
+}
+
+service_running() {
+    service_installed && systemctl is-active --quiet minecraft.service
+}
+
+terminal_running() {
+    [[ -e "$server/.start.lock" ]] && ! flock -n "$server/.start.lock" true 2>/dev/null
+}
+
+send() {
+    if [[ -w "$console" ]]; then
+        printf '%s\n' "$*" >"$console"
+    elif [[ -p "$console" ]]; then
+        printf '%s\n' "$*" | sudo tee "$console" >/dev/null
+    else
+        return 1
+    fi
+}
+
+check_name() {
+    [[ "$1" =~ ^[A-Za-z0-9_]{1,16}$ ]] || die "'$1' is not a valid Minecraft name (letters, digits, _; at most 16)."
+}
+
+# edit_list <file> <add|remove|op> <name>: edits whitelist.json / ops.json with the offline UUID.
+edit_list() {
+    python3 - "$@" <<'PY'
+import hashlib, json, os, sys, tempfile, uuid
+
+path, action, name = sys.argv[1:]
+
+def offline_uuid(player):
+    # Same as Java's UUID.nameUUIDFromBytes("OfflinePlayer:" + name), which offline-mode servers use.
+    digest = bytearray(hashlib.md5(("OfflinePlayer:" + player).encode("utf-8")).digest())
+    digest[6] = (digest[6] & 0x0F) | 0x30
+    digest[8] = (digest[8] & 0x3F) | 0x80
+    return str(uuid.UUID(bytes=bytes(digest)))
+
+try:
+    with open(path, encoding="utf-8") as f:
+        entries = json.load(f)
+except FileNotFoundError:
+    entries = []
+entries = [e for e in entries if e.get("name", "").lower() != name.lower()]
+if action == "add":
+    entries.append({"uuid": offline_uuid(name), "name": name})
+elif action == "op":
+    entries.append({"uuid": offline_uuid(name), "name": name, "level": 4, "bypassesPlayerLimit": False})
+directory = os.path.dirname(os.path.abspath(path))
+fd, tmp = tempfile.mkstemp(dir=directory, prefix=".tmp-")
+with os.fdopen(fd, "w", encoding="utf-8") as f:
+    json.dump(entries, f, indent=2)
+    f.write("\n")
+os.chmod(tmp, 0o660)  # the server (minecraft group) must be able to rewrite it
+os.replace(tmp, path)
+print(f"{os.path.basename(path)}: {action} {name} ({offline_uuid(name)})")
+PY
+}
+
+cmd="${1:-help}"
+shift || true
+case "$cmd" in
+    start | stop | restart)
+        service_installed || die "the service is not installed (sudo scripts/install-service.sh), or use server/start.sh"
+        sudo systemctl "$cmd" minecraft.service
+        ;;
+    status)
+        if service_installed; then
+            systemctl status minecraft.service --no-pager || true
+        elif terminal_running; then
+            echo "The server is running in a terminal (server/start.sh)."
+        else
+            echo "The server is not running."
+        fi
+        ;;
+    logs)
+        exec tail -n 60 -F "$server/logs/latest.log"
+        ;;
+    cmd | console)
+        [[ $# -gt 0 ]] || die "usage: scripts/mc cmd <command>"
+        send "$*" || die "the server is not running as a service; type the command in its console instead."
+        sleep 1
+        tail -n 5 "$server/logs/latest.log"
+        ;;
+    whitelist)
+        [[ $# -eq 2 && ( "$1" == add || "$1" == remove ) ]] || die "usage: scripts/mc whitelist add|remove <name>"
+        check_name "$2"
+        edit_list "$server/whitelist.json" "$1" "$2"
+        if service_running; then
+            send "whitelist reload" && echo "Reloaded the whitelist."
+        elif terminal_running; then
+            echo "Now type in the server console:  whitelist reload"
+        fi
+        ;;
+    op)
+        [[ $# -eq 1 ]] || die "usage: scripts/mc op <name>"
+        check_name "$1"
+        if service_running || terminal_running; then
+            # A running server keeps its own op list, so ask it. This is only right once
+            # the player has joined (then the server knows their offline UUID).
+            grep -qi "\"name\": *\"$1\"" "$server/usercache.json" 2>/dev/null \
+                || echo "Warning: $1 has not joined yet. Let them join once, then run this again." >&2
+            if service_running; then
+                send "op $1" && echo "Sent: op $1"
+            else
+                echo "Type in the server console:  op $1"
+            fi
+        else
+            edit_list "$server/ops.json" op "$1"
+        fi
+        ;;
+    backup)
+        if service_installed; then
+            sudo systemctl start minecraft-backup.service && sudo ls -lt "$server/backups" | sed -n 2p
+        else
+            "$repo/scripts/backup.sh" "$@"
+        fi
+        ;;
+    help | -h | --help)
+        sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+        ;;
+    *)
+        die "unknown command '$cmd' (try: scripts/mc help)"
+        ;;
+esac

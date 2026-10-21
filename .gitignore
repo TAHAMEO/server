@@ -1,0 +1,49 @@
+# This repository is PUBLIC. Never commit player data, passwords, logs (they
+# contain player IP addresses) or downloaded jars. The server and the scripts
+# recreate all of these by themselves.
+
+# Worlds and backups
+server/world/
+server/world-*/
+server/world_*/
+server/backups/
+
+# Logs and crash reports (contain player IPs)
+server/logs/
+server/crash-reports/
+server/debug/
+server/*.log
+
+# Player lists: in offline mode a leaked whitelist tells attackers which
+# names to impersonate
+server/ops.json
+server/whitelist.json
+server/banned-ips.json
+server/banned-players.json
+server/usercache.json
+server/usernamecache.json
+
+# Login database (password hashes)
+server/serverauth/
+
+# Downloaded or generated files (scripts/install-mods.py, scripts/get-java.sh, the mods)
+server/mods/
+server/tacz/
+server/.java/
+server/.mods-installed.json
+server/.start.lock
+modpack/cache/
+modpack/manual/
+modpack/manual-client/
+dist/
+
+# Build and test output
+mods-src/*/build/
+mods-src/*/test/node_modules/
+mods-src/*/test/package-lock.json
+__pycache__/
+
+# Editor and OS clutter
+*.swp
+*~
+.DS_Store

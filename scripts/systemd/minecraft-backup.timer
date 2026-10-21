@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Minecraft world backup
+
+[Timer]
+OnCalendar=*-*-* 05:00:00
+# Catch up after the laptop was off or asleep at 05:00.
+Persistent=true
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

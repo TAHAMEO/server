@@ -1,0 +1,64 @@
+{
+  "pack": {
+    "name": "Zombie Apocalypse",
+    "version": "1.0.0",
+    "minecraft": "1.20.1",
+    "loader": "forge",
+    "forge": "47.4.27"
+  },
+  "mods": [
+    { "name": "Timeless and Classics Zero (TaCZ)", "curseforge": "timeless-and-classics-zero", "curseforgeId": 1028108, "modrinth": "timeless-and-classics-zero", "side": "both", "group": "requested" },
+    { "name": "Vic's Point Blank", "curseforge": "vics-point-blank", "curseforgeId": 961053, "modrinth": "vics-point-blank", "side": "both", "group": "requested",
+      "notes": "Known crash: holding a Point Blank akimbo gun in the off-hand while a TaCZ gun is in the main hand (pointblank-issues #65)." },
+    { "name": "Mo' Than Enough Guns", "curseforge": "mo-than-enough-guns", "side": "both", "group": "requested",
+      "notes": "Add-on for Just Enough Guns (pulled in automatically as a dependency)." },
+    { "name": "[TACZ] LesRaisins Tactical Equipements", "curseforge": "tacz-lesraisins-tactical-equipements", "modrinth": "lr-tactical", "side": "both", "group": "requested" },
+    { "name": "[SBW] Superb Warfare", "curseforge": "superb-warfare", "modrinth": "superb-warfare", "side": "both", "group": "requested" },
+    { "name": "[SBW] Vintage Vehicle Pack", "curseforge": "sbw-vintage-vehicle-pack", "side": "both", "group": "requested" },
+    { "name": "[SBW] MCSP Military Vehicle", "curseforge": "mcsp-military-vehicle", "side": "both", "group": "requested" },
+    { "name": "[SBW] AshVehicle", "curseforge": "ashvehicles", "side": "both", "group": "requested" },
+    { "name": "[Immersive Vehicles] VEB Automobilwerke Schwikau", "curseforge": "veb-aws", "modrinth": "veb-aws", "side": "both", "group": "requested" },
+    { "name": "Survival Instinct", "curseforge": "survival-instinct", "curseforgeId": 1242915, "modrinth": "survival-instinct", "side": "both", "group": "requested" },
+    { "name": "Fracture Point (was Warborn Resurgence)", "curseforge": "fracture-point", "modrinth": "fracturepoint", "side": "both", "group": "requested" },
+    { "name": "LesRaisins Armor", "curseforge": "lesraisins-armor", "curseforgeId": 1021131, "modrinth": "lesraisins-armor", "side": "both", "group": "requested" },
+    { "name": "Keerdm's Zombie Apocalypse Essentials", "curseforge": "keerdm-zombie-apocalypse-essentials", "curseforgeId": 1061079, "side": "both", "group": "requested",
+      "match": "TACZ", "notes": "Has a TaCZ and a Point Blank variant; this pack uses the TaCZ one. Builds on The Lost Cities." },
+    { "name": "Simply Traps", "curseforge": "simply-traps", "curseforgeId": 1172014, "side": "both", "group": "requested" },
+    { "name": "SecurityCraft", "curseforge": "security-craft", "curseforgeId": 64760, "modrinth": "security-craft", "side": "both", "group": "requested" },
+    { "name": "Doomsday Decoration", "curseforge": "doomsday-decoration", "side": "both", "group": "requested" },
+    { "name": "Chovy's Apocalypse", "curseforge": "chovys-apocalypse", "side": "both", "group": "requested" },
+    { "name": "Explosion Overhaul", "curseforge": "explosion-overhaul-a-new-level-of-destruction", "side": "both", "group": "requested" },
+    { "name": "EnhancedVisuals", "curseforge": "enhancedvisuals", "modrinth": "enhancedvisuals", "side": "client", "group": "requested",
+      "notes": "Visual effects only; it runs on the players' game, the server does not need it." },
+
+    { "name": "GeckoLib", "curseforge": "geckolib", "curseforgeId": 388172, "modrinth": "geckolib", "side": "both", "group": "dependency" },
+    { "name": "Curios API", "curseforge": "curios", "curseforgeId": 309927, "modrinth": "curios", "side": "both", "group": "dependency" },
+    { "name": "Kotlin for Forge", "curseforge": "kotlin-for-forge", "modrinth": "kotlin-for-forge", "side": "both", "group": "dependency" },
+    { "name": "Immersive Vehicles", "curseforge": "minecraft-transport-simulator", "curseforgeId": 286703, "modrinth": "immersive-vehicles", "side": "both", "group": "dependency" },
+    { "name": "The Lost Cities", "curseforge": "the-lost-cities", "modrinth": "the-lost-cities", "side": "both", "group": "dependency" },
+    { "name": "Immersive Weathering", "curseforge": "immersive-weathering-forge", "curseforgeId": 592449, "modrinth": "immersive-weathering", "side": "both", "group": "dependency" },
+    { "name": "Moonlight Lib", "curseforge": "selene", "modrinth": "moonlight", "side": "both", "group": "dependency" },
+    { "name": "CreativeCore", "curseforge": "creativecore", "modrinth": "creativecore", "side": "client", "group": "dependency" },
+
+    { "name": "ModernFix", "curseforge": "modernfix", "modrinth": "modernfix", "side": "both", "group": "performance",
+      "notes": "Faster start, less memory. Also good on the players' side but not required there." },
+    { "name": "FerriteCore", "curseforge": "ferritecore", "modrinth": "ferrite-core", "side": "both", "group": "performance",
+      "notes": "Less memory. Also good on the players' side but not required there." },
+    { "name": "spark", "curseforge": "spark", "modrinth": "spark", "side": "server", "group": "performance",
+      "notes": "Lag profiler: /spark profiler, /spark health." },
+    { "name": "Chunky", "curseforge": "chunky-pregenerator-forge", "modrinth": "chunky", "side": "server", "group": "performance",
+      "notes": "Pre-generates the world so exploring does not lag: /chunky radius 1500, /chunky start." },
+    { "name": "Async Locator", "curseforge": "async-locator", "modrinth": "async-locator", "side": "server", "group": "performance" },
+    { "name": "AI Improvements", "curseforge": "ai-improvements", "side": "server", "group": "performance", "enabled": false,
+      "notes": "Off by default: it can change how modded zombies notice players. Enable to save CPU if mobs behave fine." },
+
+    { "name": "Embeddium", "curseforge": "embeddium", "modrinth": "embeddium", "side": "client", "group": "client-performance",
+      "notes": "Big FPS boost (Sodium for Forge). Do not use with OptiFine or Rubidium." },
+    { "name": "Entity Culling", "curseforge": "entityculling", "modrinth": "entityculling", "side": "client", "group": "client-performance" },
+    { "name": "ImmediatelyFast", "curseforge": "immediatelyfast", "modrinth": "immediatelyfast", "side": "client", "group": "client-performance" }
+  ],
+  "local": [
+    { "name": "Server Auth (login system)", "file": "local/serverauth-1.0.0.jar", "side": "server",
+      "notes": "Built from mods-src/serverauth. Server only: players do not install it." }
+  ]
+}
